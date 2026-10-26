@@ -48,6 +48,15 @@ export interface MetricasFiados {
   totalRecuperado: number;
 }
 
+export interface MetricasVentas {
+  totalVentasHoy: number;
+  articulosVendidosHoy: number;
+  transaccionesHoy: number;
+  totalVentasSemana: number;
+  articulosVendidosSemana: number;
+  transaccionesSemana: number;
+}
+
 function supabaseConfigurado() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -237,6 +246,7 @@ interface InventarioCtx {
   fiados: RegistroFiado[];
   metricas: MetricasInventario;
   metricasFiados: MetricasFiados;
+  metricasVentas: MetricasVentas;
   cargando: boolean;
   error: string | null;
   recargar: () => Promise<void>;
@@ -270,7 +280,8 @@ interface InventarioCtx {
   abrirModalProducto: (p?: Producto | "nuevo", categoriaPredefinida?: string) => void;
   cerrarModalProducto: () => void;
   modalMovimiento: string | null;
-  abrirModalMovimiento: (productoId?: string) => void;
+  modalMovimientoTipoInicial?: TipoMovimiento;
+  abrirModalMovimiento: (productoId?: string, tipoInicial?: TipoMovimiento) => void;
   cerrarModalMovimiento: () => void;
   modalFiado: boolean;
   abrirModalFiado: () => void;
@@ -292,9 +303,11 @@ export function InventarioProvider({ children }: { children: ReactNode }) {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [avisos, setAvisos] = useState<Aviso[]>([]);
+  const [esCliente, setEsCliente] = useState(false);
 
   // Hidratación segura del almacenamiento local del cliente tras el montaje
   useEffect(() => {
+    setEsCliente(true);
     try {
       const guardado = localStorage.getItem(LS_KEY);
       const guardadoFiados = localStorage.getItem(LS_FIADOS_KEY);
@@ -316,6 +329,7 @@ export function InventarioProvider({ children }: { children: ReactNode }) {
   const [modalProducto, setModalProducto] = useState<Producto | "nuevo" | null>(null);
   const [categoriaInicialModalProducto, setCategoriaInicialModalProducto] = useState<string | undefined>(undefined);
   const [modalMovimiento, setModalMovimiento] = useState<string | null>(null);
+  const [modalMovimientoTipoInicial, setModalMovimientoTipoInicial] = useState<TipoMovimiento | undefined>(undefined);
   const [modalFiado, setModalFiado] = useState(false);
   const [modalCategoria, setModalCategoria] = useState<boolean | string>(false);
 
@@ -1026,6 +1040,69 @@ export function InventarioProvider({ children }: { children: ReactNode }) {
     };
   }, [fiados]);
 
+  const metricasVentas = useMemo<MetricasVentas>(() => {
+    if (!esCliente || movimientos.length === 0) {
+      return {
+        totalVentasHoy: 0,
+        articulosVendidosHoy: 0,
+        transaccionesHoy: 0,
+        totalVentasSemana: 0,
+        articulosVendidosSemana: 0,
+        transaccionesSemana: 0,
+      };
+    }
+
+    const prodsMap = new Map(productos.map((p) => [p.id, p]));
+    const ahora = new Date();
+    const hoyInicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()).getTime();
+
+    const diaSem = ahora.getDay();
+    const diffLunes = diaSem === 0 ? 6 : diaSem - 1;
+    const semanaInicio = new Date(
+      ahora.getFullYear(),
+      ahora.getMonth(),
+      ahora.getDate() - diffLunes
+    ).getTime();
+
+    let totalVentasHoy = 0;
+    let articulosVendidosHoy = 0;
+    let transaccionesHoy = 0;
+
+    let totalVentasSemana = 0;
+    let articulosVendidosSemana = 0;
+    let transaccionesSemana = 0;
+
+    for (const m of movimientos) {
+      if (m.tipo !== "salida") continue;
+
+      const t = new Date(m.created_at).getTime();
+      const prod = prodsMap.get(m.producto_id);
+      const precio = prod?.precio ?? 0;
+      const subtotal = m.cantidad * precio;
+
+      if (t >= hoyInicio) {
+        totalVentasHoy += subtotal;
+        articulosVendidosHoy += m.cantidad;
+        transaccionesHoy++;
+      }
+
+      if (t >= semanaInicio) {
+        totalVentasSemana += subtotal;
+        articulosVendidosSemana += m.cantidad;
+        transaccionesSemana++;
+      }
+    }
+
+    return {
+      totalVentasHoy,
+      articulosVendidosHoy,
+      transaccionesHoy,
+      totalVentasSemana,
+      articulosVendidosSemana,
+      transaccionesSemana,
+    };
+  }, [esCliente, movimientos, productos]);
+
   /* -------------------------------------------------------------------------- */
   /*  Modales                                                                   */
   /* -------------------------------------------------------------------------- */
@@ -1039,12 +1116,14 @@ export function InventarioProvider({ children }: { children: ReactNode }) {
     setCategoriaInicialModalProducto(undefined);
   }, []);
 
-  const abrirModalMovimiento = useCallback((productoId?: string) => {
+  const abrirModalMovimiento = useCallback((productoId?: string, tipoInicial?: TipoMovimiento) => {
     setModalMovimiento(productoId ?? "");
+    setModalMovimientoTipoInicial(tipoInicial);
   }, []);
 
   const cerrarModalMovimiento = useCallback(() => {
     setModalMovimiento(null);
+    setModalMovimientoTipoInicial(undefined);
   }, []);
 
   const abrirModalFiado = useCallback(() => setModalFiado(true), []);
@@ -1068,6 +1147,7 @@ export function InventarioProvider({ children }: { children: ReactNode }) {
       fiados,
       metricas,
       metricasFiados,
+      metricasVentas,
       cargando,
       error,
       recargar,
@@ -1091,6 +1171,7 @@ export function InventarioProvider({ children }: { children: ReactNode }) {
       abrirModalProducto,
       cerrarModalProducto,
       modalMovimiento,
+      modalMovimientoTipoInicial,
       abrirModalMovimiento,
       cerrarModalMovimiento,
       modalFiado,
@@ -1108,6 +1189,7 @@ export function InventarioProvider({ children }: { children: ReactNode }) {
       fiados,
       metricas,
       metricasFiados,
+      metricasVentas,
       cargando,
       error,
       recargar,
@@ -1131,6 +1213,7 @@ export function InventarioProvider({ children }: { children: ReactNode }) {
       abrirModalProducto,
       cerrarModalProducto,
       modalMovimiento,
+      modalMovimientoTipoInicial,
       abrirModalMovimiento,
       cerrarModalMovimiento,
       modalFiado,

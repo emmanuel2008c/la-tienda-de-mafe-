@@ -15,6 +15,7 @@ export function ModalGlobalContainer() {
     crearProducto,
     actualizarProducto,
     modalMovimiento,
+    modalMovimientoTipoInicial,
     cerrarModalMovimiento,
     registrarMovimiento,
     registrarMovimientoConNuevoProducto,
@@ -33,6 +34,7 @@ export function ModalGlobalContainer() {
       {modalMovimiento !== null && (
         <ModalMovimiento
           productoIdInicial={modalMovimiento}
+          tipoInicial={modalMovimientoTipoInicial}
           productos={productos}
           categorias={categorias}
           onCerrar={cerrarModalMovimiento}

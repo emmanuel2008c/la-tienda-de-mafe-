@@ -10,6 +10,7 @@ import type {
 
 export function ModalMovimiento({
   productoIdInicial,
+  tipoInicial = "entrada",
   productos,
   categorias = [],
   onCerrar,
@@ -17,6 +18,7 @@ export function ModalMovimiento({
   onGuardarNuevoProducto,
 }: {
   productoIdInicial: string;
+  tipoInicial?: TipoMovimiento;
   productos: Producto[];
   categorias?: string[];
   onCerrar: () => void;
@@ -52,7 +54,7 @@ export function ModalMovimiento({
   }, [productoIdInicial, productos, productoId, sinProductos]);
 
   // Campos para movimiento de producto existente
-  const [tipo, setTipo] = useState<TipoMovimiento>("entrada");
+  const [tipo, setTipo] = useState<TipoMovimiento>(tipoInicial);
   const [cantidadStr, setCantidadStr] = useState("1");
   const [nota, setNota] = useState("");
 

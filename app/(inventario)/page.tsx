@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TablaMovimientos } from "@/components/inventario/TablaMovimientos";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -13,11 +14,48 @@ export default function PaginaResumenDashboard() {
     categoriasDetalle,
     metricas,
     metricasFiados,
+    metricasVentas,
+    movimientos,
     abrirModalProducto,
     abrirModalMovimiento,
     abrirModalFiado,
     abrirModalCategoria,
   } = useInventario();
+
+  const [montado, setMontado] = useState(false);
+  useEffect(() => {
+    setMontado(true);
+  }, []);
+
+  // Lista detallada de artículos vendidos hoy
+  const ventasHoyDetalle = useMemo(() => {
+    if (!montado) return [];
+    const hoyInicio = new Date();
+    hoyInicio.setHours(0, 0, 0, 0);
+    const hoyTs = hoyInicio.getTime();
+
+    const prodsMap = new Map(productos.map((p) => [p.id, p]));
+    const salidasHoy = movimientos.filter(
+      (m) => m.tipo === "salida" && new Date(m.created_at).getTime() >= hoyTs
+    );
+
+    return salidasHoy.map((m) => {
+      const prod = prodsMap.get(m.producto_id);
+      return {
+        id: m.id,
+        nombre: prod?.nombre ?? "Producto",
+        categoria: prod?.categoria ?? "General",
+        cantidad: m.cantidad,
+        precioUnitario: prod?.precio ?? 0,
+        subtotal: m.cantidad * (prod?.precio ?? 0),
+        nota: m.nota,
+        hora: new Date(m.created_at).toLocaleTimeString("es-CO", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      };
+    });
+  }, [montado, movimientos, productos]);
 
   // Desglose por categorías con iconos y detalles
   const resumenCategorias = categoriasDetalle.map((cat) => {
@@ -76,6 +114,133 @@ export default function PaginaResumenDashboard() {
             >
               + Añadir artículo
             </button>
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* Tarjeta destacada de Ventas del Día y de la Semana */}
+      <Card className="border-border shadow-warm-xs overflow-hidden">
+        <CardBody className="space-y-4">
+          <CardHeader
+            eyebrow="Rendimiento Comercial"
+            title="Ventas del Día y de la Semana"
+            subtitle="Control en vivo de ingresos y sumatoria total de artículos vendidos"
+            action={
+              <button
+                type="button"
+                onClick={() => abrirModalMovimiento(productos[0]?.id, "salida")}
+                className="btn btn-primary btn-sm flex items-center gap-1.5"
+                title="Registrar una venta (salida de stock)"
+              >
+                <span>−</span>
+                <span>Registrar venta</span>
+              </button>
+            }
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* ☀️ Bloque: Ventas de Hoy */}
+            <div className="p-4 rounded-xl bg-primary-light/35 border border-primary/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                  <span>☀️</span>
+                  <span>Ventas de hoy</span>
+                </span>
+                <span className="badge badge-primary text-[10px]">
+                  {metricasVentas.transaccionesHoy}{" "}
+                  {metricasVentas.transaccionesHoy === 1 ? "venta" : "ventas"}
+                </span>
+              </div>
+
+              <div>
+                <div className="text-2xl sm:text-3xl font-bold font-serif text-ink">
+                  {moneda(metricasVentas.totalVentasHoy)}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-ink-muted mt-1">
+                  <span className="font-semibold text-primary">
+                    📦 {numero(metricasVentas.articulosVendidosHoy)} artículos vendidos
+                  </span>
+                  <span>•</span>
+                  <span>Sumatoria de hoy</span>
+                </div>
+              </div>
+
+              {ventasHoyDetalle.length > 0 ? (
+                <div className="pt-2 border-t border-primary/15 space-y-2">
+                  <span className="text-[11px] font-semibold text-ink-muted uppercase block">
+                    Artículos vendidos en el día:
+                  </span>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {ventasHoyDetalle.map((v) => (
+                      <div
+                        key={v.id}
+                        className="flex items-center justify-between text-xs p-2 rounded-lg bg-surface border border-border"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="font-medium text-ink truncate">{v.nombre}</p>
+                          <p className="text-[10px] text-ink-muted">
+                            {v.hora} · {v.cantidad} {v.cantidad === 1 ? "unidad" : "unidades"}
+                          </p>
+                        </div>
+                        <span className="font-bold text-primary shrink-0">
+                          {moneda(v.subtotal)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-ink-muted italic pt-1">
+                  No se han registrado salidas por venta hoy todavía.
+                </p>
+              )}
+            </div>
+
+            {/* 📅 Bloque: Ventas de la Semana */}
+            <div className="p-4 rounded-xl bg-secondary-light/60 border border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-ink-muted uppercase tracking-wider flex items-center gap-1.5">
+                  <span>📅</span>
+                  <span>Ventas de la semana</span>
+                </span>
+                <span className="badge badge-accent text-[10px]">Semana en curso</span>
+              </div>
+
+              <div>
+                <div className="text-2xl sm:text-3xl font-bold font-serif text-ink">
+                  {moneda(metricasVentas.totalVentasSemana)}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-ink-muted mt-1">
+                  <span className="font-semibold text-ink">
+                    📦 {numero(metricasVentas.articulosVendidosSemana)} artículos vendidos
+                  </span>
+                  <span>•</span>
+                  <span>Total acumulado</span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-border space-y-2 text-xs">
+                <div className="flex justify-between items-center text-ink-muted p-2 rounded-lg bg-surface">
+                  <span>Total operaciones en la semana:</span>
+                  <span className="font-bold text-ink">
+                    {metricasVentas.transaccionesSemana}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-ink-muted p-2 rounded-lg bg-surface">
+                  <span>Promedio por artículo vendido:</span>
+                  <span className="font-bold text-ink">
+                    {metricasVentas.articulosVendidosSemana > 0
+                      ? moneda(
+                          Math.round(
+                            metricasVentas.totalVentasSemana /
+                              metricasVentas.articulosVendidosSemana
+                          )
+                        )
+                      : "$ 0"}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </CardBody>
       </Card>

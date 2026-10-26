@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
-import { cantidadTexto, fechaCorta, numero, tipoMeta } from "@/lib/inventario/format";
+import { cantidadTexto, fechaCorta, moneda, numero, tipoMeta } from "@/lib/inventario/format";
 import { useInventario } from "@/lib/inventario/store";
 import type { Producto, TipoMovimiento } from "@/lib/inventario/types";
 
 export function TablaMovimientos({ limite }: { limite?: number }) {
-  const { movimientos, productos, abrirModalMovimiento, cargando } = useInventario();
+  const { movimientos, productos, abrirModalMovimiento, metricasVentas, cargando } = useInventario();
   const [filtroTipoMov, setFiltroTipoMov] = useState<string>("todos");
 
   const productoPorId = useMemo(() => {
@@ -55,6 +55,23 @@ export function TablaMovimientos({ limite }: { limite?: number }) {
           <span>⇅</span>
           <span>Registrar movimiento</span>
         </button>
+
+        {filtroTipoMov === "salida" && (
+          <div className="w-full flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-primary-light/40 border border-primary/20 text-xs mt-1">
+            <span className="font-semibold text-primary flex items-center gap-1.5">
+              <span>🛍️</span>
+              <span>
+                Vendido hoy: {moneda(metricasVentas.totalVentasHoy)} (
+                {numero(metricasVentas.articulosVendidosHoy)} artículos)
+              </span>
+            </span>
+            <span className="text-ink-muted">
+              Vendido esta semana:{" "}
+              <strong className="text-ink">{moneda(metricasVentas.totalVentasSemana)}</strong> (
+              {numero(metricasVentas.articulosVendidosSemana)} artículos)
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Tabla con Card reusable */}
