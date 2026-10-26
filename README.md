@@ -47,11 +47,6 @@ El proyecto está 100% optimizado para Next.js App Router y Vercel.
    - **Root Directory:** `./`
    - **Build Command:** `npm run build`
    - **Output Directory:** `.next`
-4. *(Opcional)* Variables de entorno en Vercel (`Settings > Environment Variables`):
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://ngapnzlrxwidxhlxiesh.supabase.co
-   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_1TdorKidjJqZi7_L3pypaQ_RBXf7m-b
-   ```
    *(Nota: La aplicación funciona a la perfección aún si no configuras Supabase, guardando todo en el navegador del usuario).*
 5. Haz clic en **Deploy**. ¡Listo!
 
