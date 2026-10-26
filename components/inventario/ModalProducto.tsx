@@ -57,8 +57,8 @@ export function ModalProducto({
       return;
     }
 
-    const pNum = parseFloat(precio) || 0;
-    const cNum = parseFloat(costo) || 0;
+    const pNum = parseFloat(precio.toString().replace(/,/g, ".")) || 0;
+    const cNum = parseFloat(costo.toString().replace(/,/g, ".")) || 0;
     const sNum = parseInt(stock, 10) || 0;
     const mNum = parseInt(stockMinimo, 10) || 0;
 
@@ -211,9 +211,10 @@ export function ModalProducto({
                 id={idPrecio}
                 type="number"
                 min="0"
-                step="500"
+                step="any"
                 required
                 className="input"
+                placeholder="Ej: 1450"
                 value={precio}
                 onChange={(e) => setPrecio(e.target.value)}
               />
@@ -226,9 +227,10 @@ export function ModalProducto({
                 id={idCosto}
                 type="number"
                 min="0"
-                step="500"
+                step="any"
                 required
                 className="input"
+                placeholder="Ej: 1000"
                 value={costo}
                 onChange={(e) => setCosto(e.target.value)}
               />

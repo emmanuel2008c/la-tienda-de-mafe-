@@ -108,8 +108,8 @@ export function ModalMovimiento({
             ? otraCategoria.trim() || "General"
             : categoriaNueva || "General";
 
-        const pVenta = precioVentaStr ? parseFloat(precioVentaStr) : undefined;
-        const pCosto = precioCostoStr ? parseFloat(precioCostoStr) : undefined;
+        const pVenta = precioVentaStr ? parseFloat(precioVentaStr.toString().replace(/,/g, ".")) : undefined;
+        const pCosto = precioCostoStr ? parseFloat(precioCostoStr.toString().replace(/,/g, ".")) : undefined;
         const sMin = stockMinimoStr ? parseInt(stockMinimoStr, 10) : 5;
 
         if (onGuardarNuevoProducto) {

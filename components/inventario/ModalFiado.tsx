@@ -33,7 +33,7 @@ export function ModalFiado({ onCerrar }: { onCerrar: () => void }) {
   };
 
   const cantidad = parseInt(cantidadStr, 10) || 0;
-  const valorUnitario = parseFloat(valorUnitarioStr) || 0;
+  const valorUnitario = parseFloat(valorUnitarioStr.toString().replace(/,/g, ".")) || 0;
   const valorTotal = useMemo(() => cantidad * valorUnitario, [cantidad, valorUnitario]);
 
   const idCliente = useId();
@@ -254,9 +254,10 @@ export function ModalFiado({ onCerrar }: { onCerrar: () => void }) {
                 id={idValor}
                 type="number"
                 min="0"
-                step="500"
+                step="any"
                 required
                 className="input"
+                placeholder="Ej: 1450"
                 value={valorUnitarioStr}
                 onChange={(e) => setValorUnitarioStr(e.target.value)}
               />
