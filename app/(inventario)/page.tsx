@@ -4,13 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TablaMovimientos } from "@/components/inventario/TablaMovimientos";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
-import { moneda, numero } from "@/lib/inventario/format";
+import {
+  estadoSalidaMeta,
+  moneda,
+  numero,
+  obtenerEstadoSalida,
+} from "@/lib/inventario/format";
 import { useInventario } from "@/lib/inventario/store";
 
 export default function PaginaResumenDashboard() {
   const {
     productos,
-    categorias,
     categoriasDetalle,
     metricas,
     metricasFiados,
@@ -18,6 +22,7 @@ export default function PaginaResumenDashboard() {
     movimientos,
     abrirModalProducto,
     abrirModalMovimiento,
+    abrirModalEditarSalida,
     abrirModalFiado,
     abrirModalCategoria,
   } = useInventario();
@@ -27,7 +32,7 @@ export default function PaginaResumenDashboard() {
     setMontado(true);
   }, []);
 
-  // Lista detallada de artículos vendidos hoy
+  // Lista detallada de artículos con salida registrada hoy
   const ventasHoyDetalle = useMemo(() => {
     if (!montado) return [];
     const hoyInicio = new Date();
@@ -41,13 +46,18 @@ export default function PaginaResumenDashboard() {
 
     return salidasHoy.map((m) => {
       const prod = prodsMap.get(m.producto_id);
+      const precioUnitario = m.precio_unitario ?? prod?.precio ?? 0;
+      const estado = obtenerEstadoSalida(m);
       return {
         id: m.id,
+        movimiento: m,
         nombre: prod?.nombre ?? "Producto",
         categoria: prod?.categoria ?? "General",
         cantidad: m.cantidad,
-        precioUnitario: prod?.precio ?? 0,
-        subtotal: m.cantidad * (prod?.precio ?? 0),
+        precioUnitario,
+        subtotal: m.cantidad * precioUnitario,
+        estado,
+        cliente: m.cliente_nombre,
         nota: m.nota,
         hora: new Date(m.created_at).toLocaleTimeString("es-CO", {
           hour: "2-digit",
@@ -86,7 +96,7 @@ export default function PaginaResumenDashboard() {
               Bienvenida al inventario de 你好
             </h2>
             <p className="text-xs sm:text-sm text-ink-muted">
-              Monitorea existencias, reposiciones críticas, movimientos diarios y productos fiados.
+              Monitorea existencias, reposiciones críticas, salidas diarias (vendidas, fiadas o ya pagas) y clientes.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -101,11 +111,11 @@ export default function PaginaResumenDashboard() {
             <button
               id="btn-page-movimiento"
               type="button"
-              onClick={() => abrirModalMovimiento(productos[0]?.id ?? "")}
-              className="btn btn-outline btn-sm"
-              title="Registrar entrada, salida o ajuste de stock"
+              onClick={() => abrirModalMovimiento(productos[0]?.id ?? "", "salida")}
+              className="btn btn-danger btn-sm"
+              title="Registrar salida de inventario (Vendido, Fiado o Ya pago)"
             >
-              ⇅ Registrar movimiento
+              − Registrar salida
             </button>
             <button
               type="button"
@@ -118,22 +128,22 @@ export default function PaginaResumenDashboard() {
         </CardBody>
       </Card>
 
-      {/* Tarjeta destacada de Ventas del Día y de la Semana */}
+      {/* Tarjeta destacada de Ventas / Salidas del Día y de la Semana */}
       <Card className="border-border shadow-warm-xs overflow-hidden">
         <CardBody className="space-y-4">
           <CardHeader
             eyebrow="Rendimiento Comercial"
-            title="Ventas del Día y de la Semana"
-            subtitle="Control en vivo de ingresos y sumatoria total de artículos vendidos"
+            title="Salidas y Ventas del Día y de la Semana"
+            subtitle="Control en vivo de salidas registradas; puedes editar cualquier salida y su estado (Vendido, Fiado o Ya pago)"
             action={
               <button
                 type="button"
                 onClick={() => abrirModalMovimiento(productos[0]?.id, "salida")}
                 className="btn btn-primary btn-sm flex items-center gap-1.5"
-                title="Registrar una venta (salida de stock)"
+                title="Registrar una salida (Vendido, Fiado o Ya pago)"
               >
                 <span>−</span>
-                <span>Registrar venta</span>
+                <span>Registrar salida</span>
               </button>
             }
           />
@@ -144,11 +154,11 @@ export default function PaginaResumenDashboard() {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
                   <span>☀️</span>
-                  <span>Ventas de hoy</span>
+                  <span>Salidas de hoy</span>
                 </span>
                 <span className="badge badge-primary text-[10px]">
                   {metricasVentas.transaccionesHoy}{" "}
-                  {metricasVentas.transaccionesHoy === 1 ? "venta" : "ventas"}
+                  {metricasVentas.transaccionesHoy === 1 ? "salida" : "salidas"}
                 </span>
               </div>
 
@@ -158,7 +168,7 @@ export default function PaginaResumenDashboard() {
                 </div>
                 <div className="flex items-center gap-2 text-xs text-ink-muted mt-1">
                   <span className="font-semibold text-primary">
-                    📦 {numero(metricasVentas.articulosVendidosHoy)} artículos vendidos
+                    📦 {numero(metricasVentas.articulosVendidosHoy)} artículos registrados
                   </span>
                   <span>•</span>
                   <span>Sumatoria de hoy</span>
@@ -168,30 +178,53 @@ export default function PaginaResumenDashboard() {
               {ventasHoyDetalle.length > 0 ? (
                 <div className="pt-2 border-t border-primary/15 space-y-2">
                   <span className="text-[11px] font-semibold text-ink-muted uppercase block">
-                    Artículos vendidos en el día:
+                    Salidas registradas en el día (clic en Editar para modificar):
                   </span>
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                    {ventasHoyDetalle.map((v) => (
-                      <div
-                        key={v.id}
-                        className="flex items-center justify-between text-xs p-2 rounded-lg bg-surface border border-border"
-                      >
-                        <div className="min-w-0 pr-2">
-                          <p className="font-medium text-ink truncate">{v.nombre}</p>
-                          <p className="text-[10px] text-ink-muted">
-                            {v.hora} · {v.cantidad} {v.cantidad === 1 ? "unidad" : "unidades"}
-                          </p>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {ventasHoyDetalle.map((v) => {
+                      const estMeta = estadoSalidaMeta[v.estado];
+                      return (
+                        <div
+                          key={v.id}
+                          className="flex items-center justify-between gap-2 text-xs p-2.5 rounded-lg bg-surface border border-border"
+                        >
+                          <div className="min-w-0 pr-1 space-y-0.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-semibold text-ink truncate">{v.nombre}</p>
+                              <span className={`${estMeta.badge} text-[10px] py-0 px-2`}>
+                                {estMeta.etiqueta}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-ink-muted">
+                              {v.hora} · {v.cantidad} {v.cantidad === 1 ? "unidad" : "unidades"}
+                              {v.cliente ? ` · 👤 ${v.cliente}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={`font-bold ${
+                                v.estado === "fiado" ? "text-danger" : "text-primary"
+                              }`}
+                            >
+                              {moneda(v.subtotal)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => abrirModalEditarSalida(v.movimiento)}
+                              className="btn btn-outline btn-sm h-7 px-2 text-[11px]"
+                              title="Modificar todos los datos y estado de esta salida"
+                            >
+                              ✏️ Editar
+                            </button>
+                          </div>
                         </div>
-                        <span className="font-bold text-primary shrink-0">
-                          {moneda(v.subtotal)}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
                 <p className="text-xs text-ink-muted italic pt-1">
-                  No se han registrado salidas por venta hoy todavía.
+                  No se han registrado salidas hoy todavía.
                 </p>
               )}
             </div>
@@ -201,7 +234,7 @@ export default function PaginaResumenDashboard() {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-ink-muted uppercase tracking-wider flex items-center gap-1.5">
                   <span>📅</span>
-                  <span>Ventas de la semana</span>
+                  <span>Salidas de la semana</span>
                 </span>
                 <span className="badge badge-accent text-[10px]">Semana en curso</span>
               </div>
@@ -212,7 +245,7 @@ export default function PaginaResumenDashboard() {
                 </div>
                 <div className="flex items-center gap-2 text-xs text-ink-muted mt-1">
                   <span className="font-semibold text-ink">
-                    📦 {numero(metricasVentas.articulosVendidosSemana)} artículos vendidos
+                    📦 {numero(metricasVentas.articulosVendidosSemana)} artículos en salidas
                   </span>
                   <span>•</span>
                   <span>Total acumulado</span>
@@ -221,13 +254,13 @@ export default function PaginaResumenDashboard() {
 
               <div className="pt-2 border-t border-border space-y-2 text-xs">
                 <div className="flex justify-between items-center text-ink-muted p-2 rounded-lg bg-surface">
-                  <span>Total operaciones en la semana:</span>
+                  <span>Total salidas en la semana:</span>
                   <span className="font-bold text-ink">
                     {metricasVentas.transaccionesSemana}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-ink-muted p-2 rounded-lg bg-surface">
-                  <span>Promedio por artículo vendido:</span>
+                  <span>Promedio por artículo:</span>
                   <span className="font-bold text-ink">
                     {metricasVentas.articulosVendidosSemana > 0
                       ? moneda(
@@ -403,15 +436,15 @@ export default function PaginaResumenDashboard() {
           <div>
             <span className="eyebrow">Auditoría reciente</span>
             <h3 className="text-xl font-serif font-bold text-ink">
-              Últimas transacciones
+              Últimas salidas y transacciones
             </h3>
           </div>
           <Link href="/movimientos" className="text-xs text-primary font-semibold hover:underline">
-            Ver todas las transacciones →
+            Ver todas las salidas y movimientos →
           </Link>
         </div>
 
-        {/* Muestra los 5 más recientes */}
+        {/* Muestra los 5 más recientes con opción directa de editar cada salida */}
         <TablaMovimientos limite={5} />
       </div>
     </div>

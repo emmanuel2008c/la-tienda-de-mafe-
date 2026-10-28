@@ -1,4 +1,4 @@
-import type { Movimiento, Producto, TipoMovimiento } from "./types";
+import type { EstadoSalida, Movimiento, Producto, TipoMovimiento } from "./types";
 
 const fmtMoneda = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -58,6 +58,53 @@ export const tipoMeta: Record<
     texto: "text-ink-muted",
   },
 };
+
+export const estadoSalidaMeta: Record<
+  EstadoSalida,
+  {
+    etiqueta: string;
+    icono: string;
+    badge: string;
+    botonActivo: string;
+    texto: string;
+    descripcion: string;
+  }
+> = {
+  vendido: {
+    etiqueta: "Vendido",
+    icono: "🛍️",
+    badge: "badge badge-primary badge-dot",
+    botonActivo: "btn-primary",
+    texto: "text-primary",
+    descripcion: "Venta directa pagada al entregar",
+  },
+  fiado: {
+    etiqueta: "Fiado",
+    icono: "📝",
+    badge: "badge badge-danger badge-dot",
+    botonActivo: "btn-danger",
+    texto: "text-danger",
+    descripcion: "Entregado a crédito / pendiente de pago",
+  },
+  ya_pago: {
+    etiqueta: "Ya pago",
+    icono: "✓",
+    badge: "badge badge-accent badge-dot",
+    botonActivo: "btn-secondary",
+    texto: "text-ink",
+    descripcion: "Cuenta o pedido ya cancelado",
+  },
+};
+
+export function obtenerEstadoSalida(m: Pick<Movimiento, "estado_salida" | "nota">): EstadoSalida {
+  if (m.estado_salida === "vendido" || m.estado_salida === "fiado" || m.estado_salida === "ya_pago") {
+    return m.estado_salida;
+  }
+  if (m.nota && m.nota.toLowerCase().startsWith("fiado a cliente:")) {
+    return "fiado";
+  }
+  return "vendido";
+}
 
 export function cantidadTexto(m: Pick<Movimiento, "tipo" | "cantidad">) {
   if (m.tipo === "entrada") return `+${numero(m.cantidad)}`;

@@ -37,7 +37,7 @@ export function NavTabs() {
     },
     {
       href: "/movimientos",
-      label: "Historial de movimientos",
+      label: "Salidas y movimientos",
       badge: movimientos.length,
       alerta: false,
     },

@@ -1,5 +1,7 @@
 export type TipoMovimiento = "entrada" | "salida" | "ajuste";
 
+export type EstadoSalida = "vendido" | "fiado" | "ya_pago";
+
 export interface Producto {
   id: string;
   nombre: string;
@@ -23,6 +25,12 @@ export interface Movimiento {
   stock_resultante: number;
   nota: string | null;
   created_at: string;
+  /** Detalles específicos de salidas (ventas, fiados y pagos) */
+  estado_salida?: EstadoSalida;
+  precio_unitario?: number;
+  cliente_nombre?: string | null;
+  cliente_contacto?: string | null;
+  fiado_id?: string | null;
 }
 
 export interface NuevoMovimiento {
@@ -30,6 +38,24 @@ export interface NuevoMovimiento {
   tipo: TipoMovimiento;
   cantidad: number;
   nota?: string;
+  estado_salida?: EstadoSalida;
+  precio_unitario?: number;
+  cliente_nombre?: string;
+  cliente_contacto?: string;
+  created_at?: string;
+  fiado_id?: string;
+  omitirSyncFiado?: boolean;
+}
+
+export interface CambiosSalida {
+  producto_id: string;
+  cantidad: number;
+  precio_unitario: number;
+  estado_salida: EstadoSalida;
+  cliente_nombre?: string;
+  cliente_contacto?: string;
+  nota?: string;
+  created_at?: string;
 }
 
 export type EstadoFiado = "pendiente" | "pagado";
@@ -68,4 +94,3 @@ export type NuevaCategoria = {
   icono?: string;
   color?: string;
 };
-

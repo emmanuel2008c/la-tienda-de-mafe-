@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
+import { estadoSalidaMeta, moneda } from "@/lib/inventario/format";
 import type {
+  EstadoSalida,
   NuevoMovimiento,
   NuevoProducto,
   Producto,
   TipoMovimiento,
 } from "@/lib/inventario/types";
+
+function ahoraDatetimeLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
 
 export function ModalMovimiento({
   productoIdInicial,
@@ -42,21 +52,36 @@ export function ModalMovimiento({
     return productos[0]?.id || "";
   });
 
+  // Campos para movimiento de producto existente
+  const [tipo, setTipo] = useState<TipoMovimiento>(tipoInicial);
+  const [cantidadStr, setCantidadStr] = useState("1");
+  const [nota, setNota] = useState("");
+
+  // Campos específicos cuando tipo === "salida"
+  const [estadoSalida, setEstadoSalida] = useState<EstadoSalida>("vendido");
+  const [precioUnitarioStr, setPrecioUnitarioStr] = useState<string>(() => {
+    const inicial =
+      productos.find((p) => p.id === productoIdInicial) ?? productos[0];
+    return inicial ? String(inicial.precio) : "0";
+  });
+  const [clienteNombre, setClienteNombre] = useState("");
+  const [clienteContacto, setClienteContacto] = useState("");
+  const [fechaInicialLocal] = useState(() => ahoraDatetimeLocal());
+  const [fechaLocal, setFechaLocal] = useState(() => fechaInicialLocal);
+
   useEffect(() => {
     if (sinProductos) {
       setEsNuevoProducto(true);
     } else if (productoIdInicial && productos.some((p) => p.id === productoIdInicial)) {
       setProductoId(productoIdInicial);
+      const p = productos.find((x) => x.id === productoIdInicial);
+      if (p) setPrecioUnitarioStr(String(p.precio));
       setEsNuevoProducto(false);
     } else if (!productoId && productos.length > 0) {
       setProductoId(productos[0].id);
+      setPrecioUnitarioStr(String(productos[0].precio));
     }
   }, [productoIdInicial, productos, productoId, sinProductos]);
-
-  // Campos para movimiento de producto existente
-  const [tipo, setTipo] = useState<TipoMovimiento>(tipoInicial);
-  const [cantidadStr, setCantidadStr] = useState("1");
-  const [nota, setNota] = useState("");
 
   // Campos para nuevo producto inline
   const [nombreNuevo, setNombreNuevo] = useState("");
@@ -75,6 +100,14 @@ export function ModalMovimiento({
   );
 
   const cantidad = parseInt(cantidadStr, 10) || 0;
+  const precioUnitario =
+    precioUnitarioStr.trim() === ""
+      ? 0
+      : parseFloat(precioUnitarioStr.toString().replace(/,/g, ".")) || 0;
+  const valorTotalSalida = useMemo(
+    () => cantidad * precioUnitario,
+    [cantidad, precioUnitario]
+  );
 
   // Cálculo del stock previsto
   const stockResultante = useMemo(() => {
@@ -83,6 +116,19 @@ export function ModalMovimiento({
     if (tipo === "salida") return Math.max(0, productoSel.stock - cantidad);
     return cantidad; // ajuste directo
   }, [productoSel, tipo, cantidad]);
+
+  const handleCambiarProducto = (val: string) => {
+    if (val === "__nuevo__") {
+      setTipo("entrada");
+      setEsNuevoProducto(true);
+    } else {
+      setProductoId(val);
+      const prod = productos.find((p) => p.id === val);
+      if (prod) {
+        setPrecioUnitarioStr(String(prod.precio));
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,8 +156,12 @@ export function ModalMovimiento({
             ? otraCategoria.trim() || "General"
             : categoriaNueva || "General";
 
-        const pVenta = precioVentaStr ? parseFloat(precioVentaStr.toString().replace(/,/g, ".")) : undefined;
-        const pCosto = precioCostoStr ? parseFloat(precioCostoStr.toString().replace(/,/g, ".")) : undefined;
+        const pVenta = precioVentaStr
+          ? parseFloat(precioVentaStr.toString().replace(/,/g, "."))
+          : undefined;
+        const pCosto = precioCostoStr
+          ? parseFloat(precioCostoStr.toString().replace(/,/g, "."))
+          : undefined;
         const sMin = stockMinimoStr ? parseInt(stockMinimoStr, 10) : 5;
 
         if (onGuardarNuevoProducto) {
@@ -147,11 +197,40 @@ export function ModalMovimiento({
           return;
         }
 
+        if (tipo === "salida" && precioUnitario < 0) {
+          setErrorLocal("El precio unitario no puede ser negativo.");
+          setGuardando(false);
+          return;
+        }
+
+        if (tipo === "salida" && estadoSalida === "fiado" && !clienteNombre.trim()) {
+          setErrorLocal("Ingresa el nombre del cliente cuando la salida es Fiado.");
+          setGuardando(false);
+          return;
+        }
+
+        let fechaIso: string | undefined;
+        if (tipo === "salida" && fechaLocal && fechaLocal !== fechaInicialLocal) {
+          const parsed = new Date(fechaLocal);
+          if (!Number.isNaN(parsed.getTime())) {
+            fechaIso = parsed.toISOString();
+          }
+        }
+
         await onGuardar({
           producto_id: prodIdFinal,
           tipo,
           cantidad,
           nota: nota.trim() || undefined,
+          ...(tipo === "salida"
+            ? {
+                estado_salida: estadoSalida,
+                precio_unitario: precioUnitario,
+                cliente_nombre: clienteNombre.trim() || undefined,
+                cliente_contacto: clienteContacto.trim() || undefined,
+                created_at: fechaIso,
+              }
+            : {}),
         });
       }
     } catch (err) {
@@ -168,11 +247,17 @@ export function ModalMovimiento({
   const idPVenta = useId();
   const idPCosto = useId();
   const idSMin = useId();
+  const idPrecioSalida = useId();
+  const idClienteSalida = useId();
+  const idContactoSalida = useId();
+  const idFechaSalida = useId();
+
+  const esModoSalida = !sinProductos && !esNuevoProducto && tipo === "salida";
 
   return (
     <div className="modal-backdrop" onClick={onCerrar}>
       <div
-        className="modal-card max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+        className="modal-card max-w-xl overflow-y-auto animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -180,7 +265,9 @@ export function ModalMovimiento({
           <div className="flex items-center justify-between border-b border-border pb-3.5">
             <div>
               <span className="eyebrow">Control de existencias</span>
-              <h2 className="text-xl font-serif font-bold text-ink">Registrar movimiento</h2>
+              <h2 className="text-xl font-serif font-bold text-ink">
+                {esModoSalida ? "Registrar salida de inventario" : "Registrar movimiento"}
+              </h2>
             </div>
             <button
               type="button"
@@ -221,7 +308,7 @@ export function ModalMovimiento({
                   [
                     { id: "entrada", label: "+ Entrada (Compra)", cls: "btn-primary" },
                     { id: "salida", label: "− Salida (Venta)", cls: "btn-danger" },
-                    { id: "ajuste", label: "= Ajuste (Conteo)", cls: "btn-warning" },
+                    { id: "ajuste", label: "= Ajuste (Conteo)", cls: "btn-secondary" },
                   ] as const
                 ).map((t) => (
                   <button
@@ -244,6 +331,50 @@ export function ModalMovimiento({
             </div>
           )}
 
+          {/* Selector de Estado cuando es una Salida: Vendido, Fiado o Ya pago */}
+          {esModoSalida && (
+            <div className="space-y-2">
+              <label className="label mb-0">Estado de la salida *</label>
+              <div className="grid grid-cols-3 gap-2.5">
+                {(["vendido", "fiado", "ya_pago"] as const).map((est) => {
+                  const meta = estadoSalidaMeta[est];
+                  const activo = estadoSalida === est;
+                  return (
+                    <button
+                      key={est}
+                      type="button"
+                      onClick={() => setEstadoSalida(est)}
+                      className={`p-2.5 rounded-xl border text-left transition-all flex flex-col gap-1 ${
+                        activo
+                          ? est === "fiado"
+                            ? "border-danger bg-danger-light/60 shadow-warm-sm ring-1 ring-danger"
+                            : est === "ya_pago"
+                            ? "border-accent bg-accent-light/80 shadow-warm-sm ring-1 ring-accent"
+                            : "border-primary bg-primary-light/80 shadow-warm-sm ring-1 ring-primary"
+                          : "border-border bg-surface hover:border-accent"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-sm font-bold text-ink flex items-center gap-1.5">
+                          <span>{meta.icono}</span>
+                          <span>{meta.etiqueta}</span>
+                        </span>
+                        {activo && (
+                          <span className="text-[10px] font-extrabold uppercase text-primary">
+                            ●
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-ink-muted leading-tight">
+                        {meta.descripcion}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Selección de producto (o nuevo producto) */}
           {!sinProductos && (
             <div>
@@ -251,13 +382,15 @@ export function ModalMovimiento({
                 <label htmlFor={idSelect} className="label mb-0">
                   Producto a registrar
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setEsNuevoProducto(!esNuevoProducto)}
-                  className="text-xs text-accent hover:underline font-semibold"
-                >
-                  {esNuevoProducto ? "← Elegir producto existente" : "+ Crear nuevo producto aquí"}
-                </button>
+                {tipo === "entrada" && (
+                  <button
+                    type="button"
+                    onClick={() => setEsNuevoProducto(!esNuevoProducto)}
+                    className="text-xs text-primary hover:underline font-semibold"
+                  >
+                    {esNuevoProducto ? "← Elegir producto existente" : "+ Crear nuevo producto aquí"}
+                  </button>
+                )}
               </div>
 
               {!esNuevoProducto ? (
@@ -265,20 +398,16 @@ export function ModalMovimiento({
                   id={idSelect}
                   className="select"
                   value={productoId || productoSel?.id || ""}
-                  onChange={(e) => {
-                    if (e.target.value === "__nuevo__") {
-                      setEsNuevoProducto(true);
-                    } else {
-                      setProductoId(e.target.value);
-                    }
-                  }}
+                  onChange={(e) => handleCambiarProducto(e.target.value)}
                 >
                   {productos.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.nombre} · SKU: {p.sku || "S/N"} (Stock actual: {p.stock} uds)
+                      {p.nombre} · {moneda(p.precio)} · SKU: {p.sku || "S/N"} (Stock: {p.stock} uds)
                     </option>
                   ))}
-                  <option value="__nuevo__">+ Registrar otro producto nuevo...</option>
+                  {tipo === "entrada" && (
+                    <option value="__nuevo__">+ Registrar otro producto nuevo...</option>
+                  )}
                 </select>
               ) : null}
             </div>
@@ -400,7 +529,7 @@ export function ModalMovimiento({
             </div>
           )}
 
-          {/* Cantidad y Preview de Stock */}
+          {/* Cantidad y Preview de Stock / Precio unitario si es salida */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
             <div>
               <div className="flex justify-between items-center mb-1">
@@ -426,7 +555,9 @@ export function ModalMovimiento({
                 />
                 <button
                   type="button"
-                  onClick={() => setCantidadStr(String(Math.max(1, (parseInt(cantidadStr, 10) || 0) + 1)))}
+                  onClick={() =>
+                    setCantidadStr(String(Math.max(1, (parseInt(cantidadStr, 10) || 0) + 1)))
+                  }
                   className="btn btn-outline btn-sm px-2.5 h-10"
                   title="Sumar 1"
                 >
@@ -434,7 +565,9 @@ export function ModalMovimiento({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCantidadStr(String(Math.max(1, (parseInt(cantidadStr, 10) || 0) + 5)))}
+                  onClick={() =>
+                    setCantidadStr(String(Math.max(1, (parseInt(cantidadStr, 10) || 0) + 5)))
+                  }
                   className="btn btn-outline btn-sm px-2.5 h-10"
                   title="Sumar 5"
                 >
@@ -443,54 +576,179 @@ export function ModalMovimiento({
               </div>
             </div>
 
-            {/* Tarjeta de pronóstico de inventario */}
-            <div className="p-3 rounded-xl bg-surface border border-border shadow-warm-xs text-xs space-y-1">
-              <span className="text-ink-muted text-[11px] block">Existencia resultante prevista:</span>
-              <div className="text-base font-bold text-ink flex items-center gap-2">
-                {!esNuevoProducto && !sinProductos ? (
-                  <>
-                    <span className="text-ink-muted">{productoSel?.stock ?? 0}</span>
-                    <span className="text-ink-muted font-normal">→</span>
-                    <span
-                      className={
-                        tipo === "salida"
-                          ? "text-danger font-extrabold"
-                          : tipo === "ajuste"
-                          ? "text-warning font-extrabold"
-                          : "text-primary font-extrabold"
-                      }
+            {esModoSalida ? (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label htmlFor={idPrecioSalida} className="label mb-0">
+                    Precio unitario ($)
+                  </label>
+                  {productoSel && precioUnitario !== productoSel.precio && (
+                    <button
+                      type="button"
+                      onClick={() => setPrecioUnitarioStr(String(productoSel.precio))}
+                      className="text-[11px] text-primary hover:underline font-semibold"
                     >
-                      {stockResultante} uds
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-primary font-extrabold">
-                    +{cantidad} uds disponibles
-                  </span>
-                )}
+                      Catálogo ({moneda(productoSel.precio)})
+                    </button>
+                  )}
+                </div>
+                <input
+                  id={idPrecioSalida}
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  className="input font-semibold"
+                  value={precioUnitarioStr}
+                  onChange={(e) => setPrecioUnitarioStr(e.target.value)}
+                />
               </div>
-            </div>
+            ) : (
+              /* Tarjeta de pronóstico de inventario para entradas y ajustes */
+              <div className="p-3 rounded-xl bg-surface border border-border shadow-warm-xs text-xs space-y-1">
+                <span className="text-ink-muted text-[11px] block">
+                  Existencia resultante prevista:
+                </span>
+                <div className="text-base font-bold text-ink flex items-center gap-2">
+                  {!esNuevoProducto && !sinProductos ? (
+                    <>
+                      <span className="text-ink-muted">{productoSel?.stock ?? 0}</span>
+                      <span className="text-ink-muted font-normal">→</span>
+                      <span
+                        className={
+                          tipo === "ajuste"
+                            ? "text-warning font-extrabold"
+                            : "text-primary font-extrabold"
+                        }
+                      >
+                        {stockResultante} uds
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-primary font-extrabold">
+                      +{cantidad} uds disponibles
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Nota o motivo */}
-          <div>
-            <label htmlFor={idNota} className="label">
-              Nota o motivo (opcional)
-            </label>
-            <input
-              id={idNota}
-              type="text"
-              className="input text-sm"
-              placeholder={
-                tipo === "entrada"
-                  ? "Ej: Factura de proveedor, reposición de bodega..."
-                  : tipo === "salida"
-                  ? "Ej: Venta en mostrador, despacho a domicilio..."
-                  : "Ej: Conteo físico mensual, merma..."
-              }
-              value={nota}
-              onChange={(e) => setNota(e.target.value)}
-            />
+          {/* Resumen financiero y de stock cuando es Salida */}
+          {esModoSalida && (
+            <>
+              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-secondary-light/50 border border-border text-xs">
+                <div>
+                  <span className="text-ink-muted uppercase font-semibold text-[10px] block">
+                    Total de la salida
+                  </span>
+                  <span
+                    className={`text-xl font-serif font-bold ${
+                      estadoSalida === "fiado" ? "text-danger" : "text-primary"
+                    }`}
+                  >
+                    {moneda(valorTotalSalida)}
+                  </span>
+                </div>
+                <div className="border-l border-border pl-3">
+                  <span className="text-ink-muted uppercase font-semibold text-[10px] block">
+                    Existencia resultante
+                  </span>
+                  <div className="text-base font-bold text-ink flex items-center gap-1.5 mt-0.5">
+                    <span className="text-ink-muted">{productoSel?.stock ?? 0}</span>
+                    <span className="text-ink-muted font-normal">→</span>
+                    <span className="text-danger font-extrabold">{stockResultante} uds</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Datos del cliente en la salida */}
+              <div
+                className={`p-3.5 rounded-xl border space-y-3 transition-colors ${
+                  estadoSalida === "fiado"
+                    ? "bg-danger-light/25 border-danger/30"
+                    : "bg-surface border-border"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-ink uppercase tracking-wider">
+                    Cliente {estadoSalida === "fiado" ? "(Obligatorio para Fiado)" : "(Opcional)"}
+                  </span>
+                  {estadoSalida === "fiado" && (
+                    <span className="badge badge-danger text-[10px]">
+                      Se agrega a Clientes fijos
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor={idClienteSalida} className="label text-xs">
+                      Nombre del cliente {estadoSalida === "fiado" ? "*" : ""}
+                    </label>
+                    <input
+                      id={idClienteSalida}
+                      type="text"
+                      required={estadoSalida === "fiado"}
+                      className="input text-sm h-10"
+                      placeholder="Ej: Doña Carmen, Carlos..."
+                      value={clienteNombre}
+                      onChange={(e) => setClienteNombre(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor={idContactoSalida} className="label text-xs">
+                      Teléfono / Contacto
+                    </label>
+                    <input
+                      id={idContactoSalida}
+                      type="tel"
+                      className="input text-sm h-10"
+                      placeholder="Ej: 310 123 4567"
+                      value={clienteContacto}
+                      onChange={(e) => setClienteContacto(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Fecha (en salida) y Nota o motivo */}
+          <div className={esModoSalida ? "grid grid-cols-1 sm:grid-cols-2 gap-4" : ""}>
+            {esModoSalida && (
+              <div>
+                <label htmlFor={idFechaSalida} className="label">
+                  Fecha y hora
+                </label>
+                <input
+                  id={idFechaSalida}
+                  type="datetime-local"
+                  className="input text-sm"
+                  value={fechaLocal}
+                  onChange={(e) => setFechaLocal(e.target.value)}
+                />
+              </div>
+            )}
+
+            <div>
+              <label htmlFor={idNota} className="label">
+                Nota o motivo (opcional)
+              </label>
+              <input
+                id={idNota}
+                type="text"
+                className="input text-sm"
+                placeholder={
+                  tipo === "entrada"
+                    ? "Ej: Factura de proveedor, reposición de bodega..."
+                    : tipo === "salida"
+                    ? "Ej: Efectivo, Nequi, abona el sábado..."
+                    : "Ej: Conteo físico mensual, merma..."
+                }
+                value={nota}
+                onChange={(e) => setNota(e.target.value)}
+              />
+            </div>
           </div>
 
           {/* Botones de acción */}
@@ -512,14 +770,16 @@ export function ModalMovimiento({
               {guardando ? (
                 <>
                   <span className="inline-block animate-spin">⏳</span>
-                  <span>Registrando movimiento…</span>
+                  <span>Registrando…</span>
                 </>
               ) : (
                 <>
-                  <span>⇅</span>
+                  <span>{esModoSalida ? "−" : "⇅"}</span>
                   <span>
                     {esNuevoProducto || sinProductos
                       ? "Registrar producto y movimiento"
+                      : esModoSalida
+                      ? `Registrar salida (${estadoSalidaMeta[estadoSalida].etiqueta})`
                       : "Registrar movimiento"}
                   </span>
                 </>

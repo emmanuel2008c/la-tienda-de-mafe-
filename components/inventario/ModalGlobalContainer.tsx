@@ -1,8 +1,9 @@
 "use client";
 
-import { tipoMeta } from "@/lib/inventario/format";
+import { estadoSalidaMeta, tipoMeta } from "@/lib/inventario/format";
 import { useInventario } from "@/lib/inventario/store";
 import { ModalCategoria } from "./ModalCategoria";
+import { ModalEditarSalida } from "./ModalEditarSalida";
 import { ModalFiado } from "./ModalFiado";
 import { ModalMovimiento } from "./ModalMovimiento";
 import { ModalProducto } from "./ModalProducto";
@@ -19,6 +20,11 @@ export function ModalGlobalContainer() {
     cerrarModalMovimiento,
     registrarMovimiento,
     registrarMovimientoConNuevoProducto,
+    modalEditarSalida,
+    estadoPredefinidoEditarSalida,
+    cerrarModalEditarSalida,
+    actualizarSalida,
+    eliminarSalida,
     modalFiado,
     cerrarModalFiado,
     modalCategoria,
@@ -30,7 +36,7 @@ export function ModalGlobalContainer() {
 
   return (
     <>
-      {/* Modal: Registrar Movimiento */}
+      {/* Modal: Registrar Movimiento / Salida */}
       {modalMovimiento !== null && (
         <ModalMovimiento
           productoIdInicial={modalMovimiento}
@@ -40,13 +46,41 @@ export function ModalGlobalContainer() {
           onCerrar={cerrarModalMovimiento}
           onGuardar={async (nuevo) => {
             await registrarMovimiento(nuevo);
-            avisar(tipoMeta[nuevo.tipo].exito);
+            if (nuevo.tipo === "salida" && nuevo.estado_salida) {
+              avisar(
+                `Salida registrada (${estadoSalidaMeta[nuevo.estado_salida].etiqueta})`
+              );
+            } else {
+              avisar(tipoMeta[nuevo.tipo].exito);
+            }
             cerrarModalMovimiento();
           }}
           onGuardarNuevoProducto={async (datos) => {
             await registrarMovimientoConNuevoProducto(datos);
             avisar("Producto y movimiento registrados con éxito");
             cerrarModalMovimiento();
+          }}
+        />
+      )}
+
+      {/* Modal: Editar Salida Registrada (todos sus aspectos y estado) */}
+      {modalEditarSalida !== null && (
+        <ModalEditarSalida
+          movimiento={modalEditarSalida}
+          estadoPredefinido={estadoPredefinidoEditarSalida}
+          productos={productos}
+          onCerrar={cerrarModalEditarSalida}
+          onGuardar={async (id, cambios) => {
+            await actualizarSalida(id, cambios);
+            avisar(
+              `Salida actualizada (${estadoSalidaMeta[cambios.estado_salida].etiqueta})`
+            );
+            cerrarModalEditarSalida();
+          }}
+          onEliminar={async (id) => {
+            await eliminarSalida(id);
+            avisar("Salida eliminada y unidades devueltas al stock");
+            cerrarModalEditarSalida();
           }}
         />
       )}

@@ -22,8 +22,20 @@ create table if not exists public.movimientos (
   cantidad         integer not null check (cantidad >= 0),
   stock_resultante integer not null check (stock_resultante >= 0),
   nota             text,
+  estado_salida    text check (estado_salida in ('vendido', 'fiado', 'ya_pago')),
+  precio_unitario  numeric(12, 2) check (precio_unitario >= 0),
+  cliente_nombre   text,
+  cliente_contacto text,
+  fiado_id         uuid,
   created_at       timestamptz not null default now()
 );
+
+-- Migración compatible para tablas existentes de movimientos
+alter table public.movimientos add column if not exists estado_salida text check (estado_salida in ('vendido', 'fiado', 'ya_pago'));
+alter table public.movimientos add column if not exists precio_unitario numeric(12, 2) check (precio_unitario >= 0);
+alter table public.movimientos add column if not exists cliente_nombre text;
+alter table public.movimientos add column if not exists cliente_contacto text;
+alter table public.movimientos add column if not exists fiado_id uuid;
 
 create index if not exists movimientos_producto_idx on public.movimientos (producto_id);
 create index if not exists movimientos_fecha_idx on public.movimientos (created_at desc);
@@ -97,4 +109,3 @@ create policy "inventario_fiados" on public.fiados
 -- insert into public.categorias (nombre, icono, descripcion, color) values
 --   ('Accesorios',       '👜', 'Bolsos tejidos, aretes y complementos artesanales', 'terracota'),
 --   ('Cuidado personal', '🌿', 'Jabones botánicos, bálsamos y cuidado de la piel', 'salvia');
-

@@ -121,19 +121,28 @@ export function HeaderInventario() {
             你好
           </h1>
           <p className="text-xs text-ink-muted hidden sm:block">
-            Control de inventario, stock mínimo y registro de movimientos
+            Control de inventario, stock mínimo, salidas y registro de movimientos
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            id="btn-header-salida"
+            type="button"
+            onClick={() => abrirModalMovimiento(productos[0]?.id ?? "", "salida")}
+            className="btn btn-danger btn-sm sm:btn-md"
+            title="Registrar salida de producto (Vendido, Fiado o Ya pago)"
+          >
+            − Registrar salida
+          </button>
           <button
             id="btn-header-movimiento"
             type="button"
-            onClick={() => abrirModalMovimiento(productos[0]?.id ?? "")}
+            onClick={() => abrirModalMovimiento(productos[0]?.id ?? "", "entrada")}
             className="btn btn-outline btn-sm sm:btn-md"
-            title="Registrar entrada, salida o ajuste de inventario"
+            title="Registrar entrada o ajuste de inventario"
           >
-            ⇅ Registrar movimiento
+            ⇅ Movimiento
           </button>
           <button
             id="btn-header-nuevo-producto"
